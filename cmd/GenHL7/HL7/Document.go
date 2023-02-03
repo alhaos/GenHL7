@@ -1,6 +1,8 @@
 package HL7
 
 import (
+	"bufio"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -21,36 +23,47 @@ func FromFile(filename string) *Document {
 
 	d := NewDocument()
 
-	bytes, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	FieldSeparator = string(bytes[3])
-	InFieldSeparator = string(bytes[4])
+	reader := bufio.NewReader(f)
 
-	lines := strings.Split(string(bytes), "\r")
+	for i := 0; ; i++ {
+		line, _, errReadLine := reader.ReadLine()
+		if errReadLine == io.EOF {
+			break
+		}
+		if errReadLine != nil {
 
-	for _, line := range lines {
-
-		if line == "" {
-			continue
+			log.Fatalln(errReadLine)
 		}
 
-		splits := strings.Split(line, FieldSeparator)
-
-		s := NewSegment(splits[0])
-
-		for _, v := range splits[1:] {
-			if strings.Contains(v, InFieldSeparator) {
-				s.Fields = append(s.Fields, NewCompositeField(
-					strings.Split(v, InFieldSeparator),
-				))
-			} else {
-				s.Fields = append(s.Fields, NewSampleField(v))
+		if i == 0 {
+			FieldSeparator = string(line[3])
+			InFieldSeparator = string(line[4])
+		} else {
+			sLine := string(line)
+			if sLine == "" {
+				continue
 			}
+
+			splits := strings.Split(sLine, FieldSeparator)
+
+			s := NewSegment(splits[0])
+
+			for _, v := range splits[1:] {
+				if strings.Contains(v, InFieldSeparator) {
+					s.Fields = append(s.Fields, NewCompositeField(
+						strings.Split(v, InFieldSeparator),
+					))
+				} else {
+					s.Fields = append(s.Fields, NewSampleField(v))
+				}
+			}
+			d.Segments = append(d.Segments, s)
 		}
-		d.Segments = append(d.Segments, s)
 	}
 	return d
 }
